@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Подбор тура</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    /* ── Tokens ── */
+    :root {
+      --bg:        #0d1117;
+      --surface:   #161b22;
+      --border:    #30363d;
+      --accent:    #2ea6d5;
+      --accent-dk: #1a7fa8;
+      --text:      #e6edf3;
+      --muted:     #8b949e;
+      --danger:    #f85149;
+      --success:   #3fb950;
+      --radius:    12px;
+      --font:      'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    /* ── Reset ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 16px; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      min-height: 100dvh;
+      padding: 0 0 100px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Header ── */
+    .app-header {
+      padding: 24px 20px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .app-header .eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+    .app-header h1 {
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--text);
+    }
+    .app-header p {
+      font-size: 14px;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* ── Progress ── */
+    .progress-wrap {
+      padding: 20px 20px 0;
+    }
+    .progress-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+      transition: width 0.35s ease;
+    }
+    .progress-label {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    /* ── Steps ── */
+    .step {
+      display: none;
+      padding: 24px 20px 0;
+      animation: fadeIn 0.2s ease;
+    }
+    .step.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .step-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      line-height: 1.3;
+    }
+
+    /* ── Consent block ── */
+    .consent-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.6;
+      margin-bottom: 20px;
+    }
+    .consent-box strong { color: var(--text); }
+
+    /* ── Form fields ── */
+    .field {
+      margin-bottom: 16px;
+    }
+    .field label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .field label .req { color: var(--accent); margin-left: 2px; }
+
+    input[type="text"],
+    input[type="tel"],
+    input[type="date"],
+    select,
+    textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      padding: 12px 14px;
+      outline: none;
+      transition: border-color 0.15s;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    input[type="date"] { color-scheme: dark; }
+    select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%238b949e' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14L2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 14px center; padding-right: 38px; }
+    textarea { resize: none; height: 90px; }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--accent);
+    }
+    input.error, select.error, textarea.error {
+      border-color: var(--danger);
+    }
+    .field-error {
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 4px;
+      display: none;
+    }
+    .field-error.visible { display: block; }
+
+    /* Date row */
+    .date-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    /* ── Chip selector ── */
+    .chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      padding: 8px 16px;
+      font-size: 14px;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      user-select: none;
+    }
+    .chip.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 600;
+    }
+
+    /* ── Companion toggle ── */
+    .toggle-row {
+      display: flex;
+      gap: 10px;
+    }
+    .toggle-btn {
+      flex: 1;
+      padding: 13px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.15s;
+    }
+    .toggle-btn.selected {
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .toggle-btn.selected-no {
+      border-color: var(--muted);
+      color: var(--text);
+    }
+
+    /* ── Summary ── */
+    .summary-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-key {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+      padding-top: 1px;
+    }
+    .summary-val {
+      font-size: 14px;
+      color: var(--text);
+      text-align: right;
+      word-break: break-word;
+    }
+
+    /* ── Success screen ── */
+    .success-screen {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60dvh;
+      padding: 40px 20px;
+      text-align: center;
+      gap: 16px;
+    }
+    .success-screen.visible { display: flex; }
+    .success-icon {
+      width: 72px;
+      height: 72px;
+      background: #1a3a24;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 36px;
+    }
+    .success-screen h2 { font-size: 22px; font-weight: 700; }
+    .success-screen p { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 280px; }
+
+    /* ── Error banner ── */
+    .error-banner {
+      display: none;
+      background: #2d1215;
+      border: 1px solid var(--danger);
+      border-radius: var(--radius);
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--danger);
+      margin: 16px 20px 0;
+    }
+    .error-banner.visible { display: block; }
+
+    /* ── Bottom nav ── */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 20px max(12px, env(safe-area-inset-bottom));
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+    }
+    .btn {
+      flex: 1;
+      padding: 14px;
+      border-radius: var(--radius);
+      border: none;
+      font-family: var(--font);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-back {
+      background: var(--surface);
+      color: var(--muted);
+      flex: 0 0 auto;
+      padding: 14px 20px;
+    }
+    .btn-primary.loading {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+    .btn-primary.loading::after {
+      content: '';
+      display: inline-block;
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-left: 8px;
+      vertical-align: -2px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<div class="app-header">
+  <span class="eyebrow">Турагентство</span>
+  <h1>Подбор тура</h1>
+  <p>Заполните анкету — менеджер свяжется в течение часа</p>
+</div>
+
+<!-- ── Progress ── -->
+<div class="progress-wrap" id="progressWrap">
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  <div class="progress-label" id="progressLabel"></div>
+</div>
+
+<!-- ── Error banner ── -->
+<div class="error-banner" id="errorBanner"></div>
+
+<!-- ════════════════════════════════
+     STEP 0 — Согласие
+════════════════════════════════ -->
+<div class="step active" id="step-0">
+  <div class="step-title">Прежде чем начать</div>
+  <div class="consent-box">
+    Нажимая «Согласен», вы даёте согласие на обработку персональных данных в соответствии с <strong>ФЗ-152</strong>.
+    Данные используются только для подбора тура и не передаются третьим лицам.
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 1 — Имя
+════════════════════════════════ -->
+<div class="step" id="step-1">
+  <div class="step-title">Как вас зовут?</div>
+  <div class="field">
+    <label>Имя и фамилия<span class="req">*</span></label>
+    <input type="text" id="name" placeholder="Иван Иванов" autocomplete="name" />
+    <div class="field-error" id="name-err">Введите имя</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 2 — Откуда летим
+════════════════════════════════ -->
+<div class="step" id="step-2">
+  <div class="step-title">Город вылета</div>
+  <div class="field">
+    <label>Выберите город<span class="req">*</span></label>
+    <select id="departure_city">
+      <option value="">— выберите —</option>
+      <option>Иркутск</option>
+      <option>Москва</option>
+      <option>Санкт-Петербург</option>
+      <option>Новосибирск</option>
+      <option>Красноярск</option>
+      <option>Екатеринбург</option>
+      <option>Другой</option>
+    </select>
+    <div class="field-error" id="departure_city-err">Выберите город</div>
+  </div>
+  <div class="field" id="departure_other_wrap" style="display:none">
+    <label>Укажите город</label>
+    <input type="text" id="departure_other" placeholder="Ваш город" />
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 3 — Направление
+════════════════════════════════ -->
+<div class="step" id="step-3">
+  <div class="step-title">Куда хотите поехать?</div>
+  <div class="field">
+    <label>Направление<span class="req">*</span></label>
+    <div class="chip-group" id="destination-chips">
+      <div class="chip" data-value="Таиланд">🇹🇭 Таиланд</div>
+      <div class="chip" data-value="Турция">🇹🇷 Турция</div>
+      <div class="chip" data-value="ОАЭ">🇦🇪 ОАЭ</div>
+      <div class="chip" data-value="Мальдивы">🏝 Мальдивы</div>
+      <div class="chip" data-value="Египет">🇪🇬 Египет</div>
+      <div class="chip" data-value="Бали">🇮🇩 Бали</div>
+      <div class="chip" data-value="Европа">🇪🇺 Европа</div>
+      <div class="chip" data-value="Россия">🇷🇺 Россия</div>
+      <div class="chip" data-value="Другое">✈️ Другое</div>
+    </div>
+    <div class="field-error" id="destination-err" style="margin-top:8px">Выберите направление</div>
+  </div>
+  <div class="field" id="destination_other_wrap" style="display:none">
+    <label>Укажите направление</label>
+    <input type="text" id="destination_other" placeholder="Куда именно?" />
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 4 — Даты
+════════════════════════════════ -->
+<div class="step" id="step-4">
+  <div class="step-title">Даты поездки</div>
+  <div class="field">
+    <label>Период<span class="req">*</span></label>
+    <div class="date-row">
+      <div>
+        <input type="date" id="start_date" />
+        <div class="field-error" id="start_date-err">Выберите дату</div>
+      </div>
+      <div>
+        <input type="date" id="end_date" />
+        <div class="field-error" id="end_date-err">Выберите дату</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 5 — Бюджет
+════════════════════════════════ -->
+<div class="step" id="step-5">
+  <div class="step-title">Бюджет</div>
+  <div class="field">
+    <label>Бюджет на человека<span class="req">*</span></label>
+    <select id="budget">
+      <option value="">— выберите —</option>
+      <option value="до 50 000 ₽">до 50 000 ₽</option>
+      <option value="50 000 – 100 000 ₽">50 000 – 100 000 ₽</option>
+      <option value="100 000 – 200 000 ₽">100 000 – 200 000 ₽</option>
+      <option value="200 000 – 400 000 ₽">200 000 – 400 000 ₽</option>
+      <option value="от 400 000 ₽">от 400 000 ₽</option>
+      <option value="Гибкий, обсудим">Гибкий, обсудим</option>
+    </select>
+    <div class="field-error" id="budget-err">Выберите бюджет</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 6 — Кол-во туристов
+════════════════════════════════ -->
+<div class="step" id="step-6">
+  <div class="step-title">Сколько туристов?</div>
+  <div class="field">
+    <label>Количество<span class="req">*</span></label>
+    <div class="chip-group" id="tourists-chips">
+      <div class="chip" data-value="1">1</div>
+      <div class="chip" data-value="2">2</div>
+      <div class="chip" data-value="3">3</div>
+      <div class="chip" data-value="4">4</div>
+      <div class="chip" data-value="5">5</div>
+      <div class="chip" data-value="6+">6+</div>
+    </div>
+    <div class="field-error" id="tourists-err" style="margin-top:8px">Выберите количество</div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 7 — Попутчик
+════════════════════════════════ -->
+<div class="step" id="step-7">
+  <div class="step-title">Нужен попутчик?</div>
+  <div class="field">
+    <div class="toggle-row">
+      <div class="toggle-btn" id="companion-yes" onclick="setCompanion(true)">Да, интересно</div>
+      <div class="toggle-btn" id="companion-no" onclick="setCompanion(false)">Нет, спасибо</div>
+    </div>
+    <div class="field-error" id="companion-err" style="margin-top:8px">Выберите вариант</div>
+  </div>
+  <div class="field" id="companion_prefs_wrap" style="display:none">
+    <label>Пожелания к попутчику</label>
+    <textarea id="companion_preferences" placeholder="Например: женщина 30–40 лет, некурящая, без детей"></textarea>
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 8 — Контакты
+════════════════════════════════ -->
+<div class="step" id="step-8">
+  <div class="step-title">Контактные данные</div>
+  <div class="field">
+    <label>Телефон<span class="req">*</span></label>
+    <input type="tel" id="phone" placeholder="+7 900 000 00 00" autocomplete="tel" />
+    <div class="field-error" id="phone-err">Введите телефон</div>
+  </div>
+  <div class="field">
+    <label>Telegram username</label>
+    <input type="text" id="username" placeholder="@username" autocomplete="off" />
+  </div>
+</div>
+
+<!-- ════════════════════════════════
+     STEP 9 — Проверка
+════════════════════════════════ -->
+<div class="step" id="step-9">
+  <div class="step-title">Проверьте данные</div>
+  <div class="summary-card" id="summary"></div>
+</div>
+
+<!-- ── Success ── -->
+<div class="success-screen" id="successScreen">
+  <div class="success-icon">✅</div>
+  <h2>Заявка отправлена!</h2>
+  <p>Менеджер свяжется с вами в ближайшее время и подберёт лучшие варианты.</p>
+</div>
+
+<!-- ── Bottom nav ── -->
+<div class="bottom-nav" id="bottomNav">
+  <button class="btn btn-back" id="btnBack" onclick="prevStep()" style="display:none">← Назад</button>
+  <button class="btn btn-primary" id="btnNext" onclick="nextStep()">Согласен и продолжить</button>
+</div>
+
+<script>
+  /* ═══════════════════════════════════════
+     Telegram WebApp init
+  ═══════════════════════════════════════ */
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    tg.enableClosingConfirmation();
+  }
+
+  /* ═══════════════════════════════════════
+     State
+  ═══════════════════════════════════════ */
+  const TOTAL_STEPS = 10; // 0..9
+  let currentStep = 0;
+  let companionNeeded = null; // true | false | null
+
+  const formData = {
+    name: '',
+    departure_city: '',
+    destination: '',
+    start_date: '',
+    end_date: '',
+    budget: '',
+    tourists_count: '',
+    need_companion: false,
+    companion_preferences: '',
+    phone: '',
+    username: ''
+  };
+
+  /* ═══════════════════════════════════════
+     Chips — generic
+  ═══════════════════════════════════════ */
+  function initChips(containerId, onSelect) {
+    document.querySelectorAll(`#${containerId} .chip`).forEach(chip => {
+      chip.addEventListener('click', () => {
+        document.querySelectorAll(`#${containerId} .chip`).forEach(c => c.classList.remove('selected'));
+        chip.classList.add('selected');
+        onSelect(chip.dataset.value);
+      });
+    });
+  }
+
+  initChips('destination-chips', val => {
+    formData.destination = val;
+    const wrap = document.getElementById('destination_other_wrap');
+    wrap.style.display = val === 'Другое' ? 'block' : 'none';
+  });
+
+  initChips('tourists-chips', val => {
+    formData.tourists_count = val;
+  });
+
+  /* Departure city "Другой" */
+  document.getElementById('departure_city').addEventListener('change', function () {
+    document.getElementById('departure_other_wrap').style.display =
+      this.value === 'Другой' ? 'block' : 'none';
+  });
+
+  /* ═══════════════════════════════════════
+     Companion toggle
+  ═══════════════════════════════════════ */
+  function setCompanion(val) {
+    companionNeeded = val;
+    formData.need_companion = val;
+    document.getElementById('companion-yes').classList.toggle('selected', val === true);
+    document.getElementById('companion-yes').classList.remove('selected-no');
+    document.getElementById('companion-no').classList.toggle('selected-no', val === false);
+    document.getElementById('companion-no').classList.remove('selected');
+    document.getElementById('companion_prefs_wrap').style.display = val ? 'block' : 'none';
+  }
+
+  /* ═══════════════════════════════════════
+     Validation per step
+  ═══════════════════════════════════════ */
+  function clearErrors() {
+    document.querySelectorAll('.field-error').forEach(el => el.classList.remove('visible'));
+    document.querySelectorAll('input,select,textarea').forEach(el => el.classList.remove('error'));
+  }
+
+  function showErr(id, msg) {
+    const el = document.getElementById(id + '-err');
+    if (el) { el.textContent = msg || el.textContent; el.classList.add('visible'); }
+    const inp = document.getElementById(id);
+    if (inp) inp.classList.add('error');
+  }
+
+  function validate(step) {
+    clearErrors();
+    let ok = true;
+
+    if (step === 1) {
+      const v = document.getElementById('name').value.trim();
+      if (!v || v.length < 2) { showErr('name', 'Введите имя'); ok = false; }
+      else formData.name = v;
+    }
+
+    if (step === 2) {
+      const sel = document.getElementById('departure_city').value;
+      if (!sel) { showErr('departure_city', 'Выберите город'); ok = false; }
+      else {
+        if (sel === 'Другой') {
+          const other = document.getElementById('departure_other').value.trim();
+          formData.departure_city = other || 'Другой';
+        } else {
+          formData.departure_city = sel;
+        }
+      }
+    }
+
+    if (step === 3) {
+      if (!formData.destination) { showErr('destination', 'Выберите направление'); ok = false; }
+      else if (formData.destination === 'Другое') {
+        const oth = document.getElementById('destination_other').value.trim();
+        if (oth) formData.destination = oth;
+      }
+    }
+
+    if (step === 4) {
+      const s = document.getElementById('start_date').value;
+      const e = document.getElementById('end_date').value;
+      if (!s) { showErr('start_date', 'Выберите дату вылета'); ok = false; }
+      if (!e) { showErr('end_date', 'Выберите дату возврата'); ok = false; }
+      if (s && e && e <= s) { showErr('end_date', 'Дата возврата должна быть позже вылета'); ok = false; }
+      if (ok) { formData.start_date = s; formData.end_date = e; }
+    }
+
+    if (step === 5) {
+      const v = document.getElementById('budget').value;
+      if (!v) { showErr('budget', 'Выберите бюджет'); ok = false; }
+      else formData.budget = v;
+    }
+
+    if (step === 6) {
+      if (!formData.tourists_count) { showErr('tourists', 'Выберите количество'); ok = false; }
+    }
+
+    if (step === 7) {
+      if (companionNeeded === null) { showErr('companion', 'Выберите вариант'); ok = false; }
+      else {
+        formData.companion_preferences = companionNeeded
+          ? document.getElementById('companion_preferences').value.trim()
+          : '';
+      }
+    }
+
+    if (step === 8) {
+      const ph = document.getElementById('phone').value.trim();
+      if (!ph || ph.length < 10) { showErr('phone', 'Введите корректный телефон'); ok = false; }
+      else formData.phone = ph;
+      const un = document.getElementById('username').value.trim();
+      formData.username = un.replace(/^@/, '');
+    }
+
+    return ok;
+  }
+
+  /* ═══════════════════════════════════════
+     Summary build
+  ═══════════════════════════════════════ */
+  function buildSummary() {
+    const rows = [
+      ['Имя', formData.name],
+      ['Город вылета', formData.departure_city],
+      ['Направление', formData.destination],
+      ['Даты', `${formData.start_date} — ${formData.end_date}`],
+      ['Бюджет / чел.', formData.budget],
+      ['Туристов', formData.tourists_count],
+      ['Попутчик', formData.need_companion ? 'Да' : 'Нет'],
+      ...(formData.need_companion && formData.companion_preferences
+        ? [['Пожелания', formData.companion_preferences]]
+        : []),
+      ['Телефон', formData.phone],
+      ['Telegram', formData.username ? '@' + formData.username : '—'],
+    ];
+    const summary = document.getElementById('summary');
+    summary.replaceChildren();
+
+    rows.forEach(([k, v]) => {
+      const row = document.createElement('div');
+      const key = document.createElement('span');
+      const val = document.createElement('span');
+
+      row.className = 'summary-row';
+      key.className = 'summary-key';
+      val.className = 'summary-val';
+      key.textContent = k;
+      val.textContent = v || '—';
+
+      row.append(key, val);
+      summary.append(row);
+    });
+  }
+
+  /* ═══════════════════════════════════════
+     Navigation
+  ═══════════════════════════════════════ */
+  function updateUI() {
+    // Hide all steps
+    document.querySelectorAll('.step').forEach(el => el.classList.remove('active'));
+    const stepEl = document.getElementById(`step-${currentStep}`);
+    if (stepEl) stepEl.classList.add('active');
+
+    // Progress
+    const pct = Math.round((currentStep / (TOTAL_STEPS - 1)) * 100);
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('progressLabel').textContent =
+      currentStep === 0 ? 'Начало' : `Шаг ${currentStep} из ${TOTAL_STEPS - 1}`;
+
+    // Buttons
+    const btnBack = document.getElementById('btnBack');
+    const btnNext = document.getElementById('btnNext');
+    btnBack.style.display = currentStep > 0 ? 'block' : 'none';
+
+    if (currentStep === 0) btnNext.textContent = 'Согласен и продолжить';
+    else if (currentStep === TOTAL_STEPS - 1) btnNext.textContent = 'Отправить заявку ✈️';
+    else btnNext.textContent = 'Далее →';
+
+    // Clear error banner
+    hideBanner();
+  }
+
+  function nextStep() {
+    if (currentStep === TOTAL_STEPS - 1) { submitForm(); return; }
+    if (currentStep > 0 && !validate(currentStep)) return;
+    if (currentStep === TOTAL_STEPS - 2) buildSummary();
+    currentStep++;
+    updateUI();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function prevStep() {
+    if (currentStep > 0) {
+      currentStep--;
+      updateUI();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     Error banner
+  ═══════════════════════════════════════ */
+  function showBanner(msg) {
+    const el = document.getElementById('errorBanner');
+    el.textContent = msg;
+    el.classList.add('visible');
+  }
+  function hideBanner() {
+    document.getElementById('errorBanner').classList.remove('visible');
+  }
+
+  /* ═══════════════════════════════════════
+     Submit
+  ═══════════════════════════════════════ */
+  async function submitForm() {
+    const btn = document.getElementById('btnNext');
+    btn.classList.add('loading');
+    btn.textContent = 'Отправляем';
+
+    // Подхватываем username из Telegram, если не заполнен
+    if (!formData.username && tg?.initDataUnsafe?.user?.username) {
+      formData.username = tg.initDataUnsafe.user.username;
+    }
+
+    try {
+      // Определяем базовый URL: в реальном деплое замените на ваш домен
+      const API_BASE = window.location.origin.includes('localhost') || window.location.origin.includes('127.')
+        ? 'http://localhost:3000'
+        : window.location.origin;
+
+      const res = await fetch(`${API_BASE}/api/lead`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Telegram-Init-Data': tg?.initData || ''
+        },
+        body: JSON.stringify(formData)
+      });
+
+      if (!res.ok) {
+        let message = `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          if (body?.message) message = body.message;
+        } catch (_err) {}
+        throw new Error(message);
+      }
+
+      // Скрываем форму, показываем успех
+      document.getElementById('progressWrap').style.display = 'none';
+      document.getElementById('bottomNav').style.display = 'none';
+      document.querySelectorAll('.step').forEach(el => el.style.display = 'none');
+      document.getElementById('successScreen').classList.add('visible');
+
+      // Закрываем Telegram WebApp через 3 сек
+      if (tg) setTimeout(() => tg.close(), 3000);
+
+    } catch (err) {
+      btn.classList.remove('loading');
+      btn.textContent = 'Отправить заявку ✈️';
+      showBanner(err.message || 'Ошибка при отправке. Проверьте соединение и попробуйте снова.');
+      console.error(err);
+    }
+  }
+
+  /* ═══════════════════════════════════════
+     Date min
+  ═══════════════════════════════════════ */
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('start_date').min = today;
+  document.getElementById('end_date').min = today;
+  document.getElementById('start_date').addEventListener('change', function () {
+    document.getElementById('end_date').min = this.value || today;
+  });
+
+  /* ═══════════════════════════════════════
+     Init
+  ═══════════════════════════════════════ */
+  updateUI();
+</script>
+</body>
+</html>
